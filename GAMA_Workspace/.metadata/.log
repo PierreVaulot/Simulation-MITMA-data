@@ -1,11 +1,11 @@
-!SESSION 2026-04-20 11:57:09.533 -----------------------------------------------
+!SESSION 2026-04-28 09:29:03.653 -----------------------------------------------
 eclipse.buildId=${build.id}
 java.version=21.0.7
 java.vendor=Eclipse Adoptium
 BootLoader constants: OS=win32, ARCH=x86_64, WS=win32, NL=fr_FR
 Command-line arguments:  -os win32 -ws win32 -arch x86_64 -data @noDefault
 
-!ENTRY org.eclipse.jface.text 4 0 2026-04-20 11:58:21.670
+!ENTRY org.eclipse.jface.text 4 0 2026-04-28 09:32:12.600
 !MESSAGE java.lang.NullPointerException: Cannot invoke "String.replace(char, char)" because "label" is null
 !STACK 0
 java.util.concurrent.CompletionException: java.lang.NullPointerException: Cannot invoke "String.replace(char, char)" because "label" is null
@@ -41,7 +41,7 @@ Caused by: java.lang.NullPointerException: Cannot invoke "String.replace(char, c
 	at java.base/java.util.concurrent.CompletableFuture$AsyncSupply.run(CompletableFuture.java:1768)
 	... 1 more
 
-!ENTRY org.eclipse.jface.text 4 0 2026-04-20 11:58:37.368
+!ENTRY org.eclipse.jface.text 4 0 2026-04-28 10:06:05.760
 !MESSAGE java.lang.NullPointerException: Cannot invoke "String.replace(char, char)" because "label" is null
 !STACK 0
 java.util.concurrent.CompletionException: java.lang.NullPointerException: Cannot invoke "String.replace(char, char)" because "label" is null
