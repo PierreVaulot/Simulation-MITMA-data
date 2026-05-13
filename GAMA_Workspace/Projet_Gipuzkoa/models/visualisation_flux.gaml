@@ -1,167 +1,180 @@
-model GipuzkoaRegionalTraffic
+model DonostiaTrafficSimulation
 
 global {
     // --- 1. DATA SOURCES ---
-    file shape_districts <- file("../includes/gipuzkoa_distritos.shp");
-    file shape_roads <- file("../includes/road_gipuzkoa/road_gipuzkoa.shp"); 
-    file csv_traffic_flows <- csv_file("../includes/flux_gipuzkoa_final.csv", ",");
-    file csv_points <- csv_file("../includes/points_region_prets.csv", true);
-    file filter_admin <- file("../includes/KATASTROA_CATASTRO/GUNEAK_ZONAS/GUNEAK_ZONAS.shp");
-    file filter_urban <- file("../includes/KATASTROA_CATASTRO/HIRILUR_URBANO/HIRILUR_URBANO.shp");
-    file filter_rural <- file("../includes/KATASTROA_CATASTRO/LANDALUR_RUSTICA/LANDALUR_RUSTICA.shp");
-
-    geometry shape <- envelope(shape_districts);
-    graph road_network;
-
-    // --- 2. CONFIGURATION PARAMETERS ---
-    float display_percentage <- 4.0; 
+    file shape_donostia <- file("../includes/donostia_distritos.shp");
+    file shape_roads <- file("../includes/road_gipuzkoa/road_gipuzkoa.shp"); // GAMA will auto-filter this!
+    file csv_points <- csv_file("../includes/points_prets.csv", true);
     
-    bool show_admin_layer <- false;
-    bool show_urban_layer <- false;
-    bool show_rural_layer <- false;
+    file csv_flows <- csv_file("../includes/Flux_08h_SanSebastian.csv", true);
+    
+    geometry shape <- envelope(shape_donostia);
+
+    // --- 2. TEMPORAL CONFIGURATION (08:00 - 09:00) ---
+    date starting_date <- date("2025-02-14 08:00:00");
+    float step <- 10 #s; 
+    
+    graph road_network;
+    int target_hour <- 8; 
 
     init {
-        // --- 3. TEMPORAL SETUP ---
-        starting_date <- date("2025-02-14 08:00:00");
-        step <- 5 #s; 
+        // --- STEP 1: DISTRICTS ---
+        create district from: shape_donostia with: [zone_id::string(read("ID"))];
         
-        // --- 4. SPATIAL INITIALIZATION ---
-        write ">>> Initializing spatial environment...";
-        create district from: shape_districts with: [zone_id::string(read("ID"))]; 
-        
-        // Initialisation des couches de filtres
-        create admin_zone from: filter_admin;
-        create urban_zone from: filter_urban;
-        create rural_zone from: filter_rural;
-        
-        map<string, district> district_index <- district as_map (each.zone_id::each);
-
-        write ">>> Building regional road network...";
+        // --- STEP 2: ROAD NETWORK ---
         create road from: shape_roads;
         road_network <- as_edge_graph(road);
-
-        write ">>> Loading Points of Interest...";
+        
+        // --- STEP 3: ESTABLISHMENT HEATMAP ---
         matrix data_pts <- matrix(csv_points);
         loop i from: 0 to: data_pts.rows - 1 {
-            create point_of_interest {
+            create establishment {
                 location <- {float(data_pts[0, i]), float(data_pts[1, i])};
             }
         }
-
-        // --- 5. TRAFFIC DATA INGESTION ---
-        matrix flow_data <- matrix(csv_traffic_flows);
-        int total_records <- flow_data.rows - 1;
+        write "[*] Displaying " + length(establishment) + " points of interest (Heatmap active).";
         
-        loop i from: 1 to: total_records {
-            if (int(flow_data[1, i]) = 8) {
-                string origin_id <- string(flow_data[2, i]);       
-                string dest_id <- string(flow_data[3, i]);      
-                int passenger_count <- int(float(flow_data[13, i])); 
+        // --- STEP 4: TRAFFIC LOADING (Anti-Crash Logic) ---
+        write "[*] Pre-calculating urban routes...";
+        do initialize_traffic;
+    }
 
-                if (origin_id in district_index.keys and dest_id in district_index.keys) {
-                    if (passenger_count > 0) {
+    action initialize_traffic {
+        matrix flow_data <- matrix(csv_flows);
+        
+        loop i from: 0 to: flow_data.rows - 1 {
+            if (int(flow_data[1, i]) = target_hour) {
+                
+                string origin_id <- string(flow_data[2, i]);      
+                string dest_id <- string(flow_data[3, i]);        
+                int trip_count <- int(float(flow_data[4, i]));    
+                string dep_time_str <- string(flow_data[7, i]);   
+                
+                list<string> t_parts <- split_with(dep_time_str, ":");
+                date exact_departure <- date([2025, 2, 14, int(t_parts), int(t_parts), int(t_parts)]);
+                
+                district origin_zone <- district first_with (each.zone_id = origin_id);
+                district dest_zone <- district first_with (each.zone_id = dest_id);
+                
+                if (origin_zone != nil and dest_zone != nil and trip_count > 0) {
+                    
+                    // --- OPTIMIZATION: SPATIAL PRE-CALCULATION ---
+                    road start_road <- road closest_to (origin_zone.location);
+                    road end_road <- road closest_to (dest_zone.location);
+                    
+                    if (start_road != nil and end_road != nil) {
+                        point precalc_start <- any_location_in(start_road);
+                        point precalc_end <- any_location_in(end_road);
+                        
                         create trip_scheduler {
-                            total_passengers <- passenger_count;
-                            int departure_delay <- rnd(3600);
-                            depart_at <- starting_date + departure_delay; 
-                            origin_zone <- district_index[origin_id];
-                            dest_zone <- district_index[dest_id];
+                            trips <- trip_count;
+                            depart_at <- exact_departure;
+                            start_node <- precalc_start; 
+                            target_node <- precalc_end;
                         }
                     }
                 }
             }
         }
-        write ">>> System Ready.";
+        write "[+] Traffic scheduled successfully: " + length(trip_scheduler) + " flows pre-calculated.";
     }
 
-    reflex telemetry_logger when: current_date.second = 0 {
-        write "[Sim Time: " + string(current_date.hour) + ":" + string(current_date.minute) + "] | [Active Vehicles: " + length(commuter) + "]";
-    }
-}
-
-// --- SPECIES DEFINITIONS ---
-
-species admin_zone {
-    aspect default {
-        draw shape color: rgb(100, 100, 255, 60) border: #blue;
+    // Auto-stop
+    reflex stop_at_nine when: current_date.hour >= 9 {
+        write "[+] 08:00 - 09:00 simulation window complete. Pausing execution.";
+        do pause;
     }
 }
 
-species urban_zone {
-    aspect default {
-        draw shape color: rgb(255, 100, 100, 80) border: #red;
-    }
-}
+// --- SPECIES ---
 
-species rural_zone {
-    aspect default {
-        draw shape color: rgb(100, 255, 100, 80) border: #green;
-    }
-}
-
+// 1. Invisible Scheduler
 species trip_scheduler {
-    int total_passengers;
+    int trips;
     date depart_at;
-    district origin_zone;
-    district dest_zone;
+    point start_node;
+    point target_node;
 
-    reflex dispatch_vehicles when: current_date >= depart_at {
-        int vehicles_to_spawn <- round(total_passengers * (display_percentage / 100.0));
-        if (vehicles_to_spawn > 0) {
-            create commuter number: vehicles_to_spawn {
-                location <- any_location_in(myself.origin_zone);
-                target <- any_location_in(myself.dest_zone);
-            }
+    reflex dispatch_agents when: current_date >= depart_at {
+        // Spawn ratio: 1 agent per 10 real trips. Increase to trips/20 if it lags.
+        create commuter number: max(1, trips / 5) {
+            // Instant spawn using pre-calculated points (no heavy spatial queries here)
+            location <- myself.start_node;
+            target <- myself.target_node;
         }
-        do die; 
+        do die;
     }
 }
 
+// 2. Basemap / Districts
 species district {
     string zone_id;
-    aspect default { draw shape color: rgb(240, 240, 240) border: #silver; }
+    aspect default {
+        draw shape color: #lightgrey border: #grey;
+    }
 }
 
-species point_of_interest {
-    aspect default { draw circle(600) color: rgb(30, 144, 255, 40); }
-}
-
+// 3. Road Network
 species road {
-    aspect default { draw shape color: rgb(110, 110, 110) width: 1.0; }
+    aspect default {
+        // Using rgb() for dark grey instead of hex code
+        draw shape color: rgb(50, 50, 50) width: 1.0;
+    }
 }
 
+// 4. Points of Interest 
+species establishment {
+    aspect default {
+        draw circle(120) color: rgb(220, 20, 60, 50); 
+    }
+}
+
+// 5. Commuters
 species commuter skills: [moving] {
     point target;
+
     reflex move {
-        do goto target: target speed: 80 #km/#h on: road_network;
-        if (location distance_to target < 50 #m) { do die; }
+        // Urban speed limit set to 30 km/h
+        do goto target: target speed: 30 #km/#h on: road_network;
+        
+        if (location distance_to target < 10 #m) {
+            do die;
+        }
     }
+
     aspect default {
-        draw circle(300) color: rgb(255, 0, 0, 40); 
-        draw triangle(400) color: #red border: #white width: 2 rotate: heading + 90;
+        // Smaller glow for urban scale
+        draw circle(80) color: rgb(0, 255, 255, 60); 
+        // City-scale vehicle representation
+        draw triangle(60) color: #cyan border: #white width: 1 rotate: heading + 90;
     }
 }
 
-// --- EXPERIMENT / GUI ---
+// --- GUI / EXPERIMENT ---
 
-experiment RegionalTrafficAnalysis type: gui {
-    
-    parameter "Flow Display Percentage (%)" var: display_percentage min: 0.1 max: 100.0 step: 0.5 category: "Traffic Settings";
-    parameter "Filter : Admin Zones" var: show_admin_layer category: "Map Filters";
-    parameter "Filter : Urban Zones" var: show_urban_layer category: "Map Filters";
-    parameter "Filter : Rural Zones" var: show_rural_layer category: "Map Filters";
-
+experiment Urban_Traffic_Simulation type: gui {
     output {
-        display "Regional Map" type: java2D background: #white {
+        display Main_Map background: #white {
+            
+            // 1. Districts (Bottom layer)
             species district aspect: default;
             
-            species admin_zone aspect: default visible: show_admin_layer;
-            species urban_zone aspect: default visible: show_urban_layer;
-            species rural_zone aspect: default visible: show_rural_layer;
+            // 2. Points of interest / Heatmap 
+            species establishment aspect: default;
             
-            species point_of_interest aspect: default;
+            // 3. Road network
             species road aspect: default;
+            
+            // 4. Vehicles 
             species commuter aspect: default;
+            
+            graphics "Simulation_Clock" {
+                string current_time_str <- string(current_date.hour) + ":" + 
+                                           (current_date.minute < 10 ? "0" : "") + string(current_date.minute) + ":" + 
+                                           (current_date.second < 10 ? "0" : "") + string(current_date.second);
+                                           
+                draw "Time: " + current_time_str at: {100, 100} color: #black font: font("SansSerif", 24, #bold);
+            }
         }
     }
 }
