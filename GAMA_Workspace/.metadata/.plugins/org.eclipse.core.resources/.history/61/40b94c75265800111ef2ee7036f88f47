@@ -6,14 +6,11 @@ global {
     file shape_roads <- file("../includes/road_gipuzkoa/road_gipuzkoa.shp"); // GAMA will auto-filter this!
     file csv_points <- csv_file("../includes/points_prets.csv", true);
     
-    // Highly optimized CSV for Donostia at 08:00 AM
     file csv_flows <- csv_file("../includes/Flux_08h_SanSebastian.csv", true);
     
-    // Restrict the simulation world strictly to Donostia
     geometry shape <- envelope(shape_donostia);
 
     // --- 2. TEMPORAL CONFIGURATION (08:00 - 09:00) ---
-    // Declaring the type 'date' and 'float' is mandatory here to avoid syntax errors.
     date starting_date <- date("2025-02-14 08:00:00");
     float step <- 10 #s; 
     
@@ -21,7 +18,7 @@ global {
     int target_hour <- 8; 
 
     init {
-        // --- STEP 1: DISTRICTS (Basemap) ---
+        // --- STEP 1: DISTRICTS ---
         create district from: shape_donostia with: [zone_id::string(read("ID"))];
         
         // --- STEP 2: ROAD NETWORK ---
@@ -59,7 +56,6 @@ global {
                 district origin_zone <- district first_with (each.zone_id = origin_id);
                 district dest_zone <- district first_with (each.zone_id = dest_id);
                 
-                // Safety check: Only create trips if both origin and destination are within Donostia
                 if (origin_zone != nil and dest_zone != nil and trip_count > 0) {
                     
                     // --- OPTIMIZATION: SPATIAL PRE-CALCULATION ---
@@ -73,7 +69,7 @@ global {
                         create trip_scheduler {
                             trips <- trip_count;
                             depart_at <- exact_departure;
-                            start_node <- precalc_start; // Store exact location to save CPU later
+                            start_node <- precalc_start; 
                             target_node <- precalc_end;
                         }
                     }
@@ -83,7 +79,7 @@ global {
         write "[+] Traffic scheduled successfully: " + length(trip_scheduler) + " flows pre-calculated.";
     }
 
-    // Auto-stop at 9:00 AM
+    // Auto-stop
     reflex stop_at_nine when: current_date.hour >= 9 {
         write "[+] 08:00 - 09:00 simulation window complete. Pausing execution.";
         do pause;
@@ -126,14 +122,14 @@ species road {
     }
 }
 
-// 4. Points of Interest (Heatmap)
+// 4. Points of Interest 
 species establishment {
     aspect default {
         draw circle(120) color: rgb(220, 20, 60, 50); 
     }
 }
 
-// 5. Vehicles (Commuters)
+// 5. Commuters
 species commuter skills: [moving] {
     point target;
 
@@ -159,18 +155,17 @@ species commuter skills: [moving] {
 experiment Urban_Traffic_Simulation type: gui {
     output {
         display Main_Map background: #white {
-            // MODIFIED DISPLAY ORDER (from bottom/background to top/foreground)
             
             // 1. Districts (Bottom layer)
             species district aspect: default;
             
-            // 2. Points of interest / Heatmap (Below the roads)
+            // 2. Points of interest / Heatmap 
             species establishment aspect: default;
             
-            // 3. Road network (On top of points of interest)
+            // 3. Road network
             species road aspect: default;
             
-            // 4. Vehicles (Top layer, driving on the roads)
+            // 4. Vehicles 
             species commuter aspect: default;
             
             graphics "Simulation_Clock" {
@@ -178,7 +173,6 @@ experiment Urban_Traffic_Simulation type: gui {
                                            (current_date.minute < 10 ? "0" : "") + string(current_date.minute) + ":" + 
                                            (current_date.second < 10 ? "0" : "") + string(current_date.second);
                                            
-                // Clock placed at top-left
                 draw "Time: " + current_time_str at: {100, 100} color: #black font: font("SansSerif", 24, #bold);
             }
         }

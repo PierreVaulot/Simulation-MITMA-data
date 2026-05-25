@@ -1,0 +1,121 @@
+model GipuzkoaTrafficOptimized
+
+global {
+    string root <- "../includes/";
+
+    file shape_districts    <- shape_file(root + "gipuzkoa_distritos.shp");
+    file shape_roads        <- shape_file(root + "road_gipuzkoa/road_gipuzkoa.shp");
+    file csv_traffic_flows  <- csv_file(root + "flux_gipuzkoa_final.csv", ",");
+    file csv_points         <- csv_file(root + "points_region_prets.csv", ",", true);
+
+    file filter_admin <- shape_file(root + "KATASTROA_CATASTRO/GUNEAK_ZONAS/GUNEAK_ZONAS.shp");
+    file filter_urban <- shape_file(root + "KATASTROA_CATASTRO/HIRILUR_URBANO/HIRILUR_URBANO.shp");
+    file filter_rural <- shape_file(root + "KATASTROA_CATASTRO/LANDALUR_RUSTICA/LANDALUR_RUSTICA.shp");
+
+    geometry shape <- envelope(shape_districts);
+    graph road_network;
+
+    float display_percentage <- 5.0; 
+    int total_spawned <- 0;
+    int total_arrived <- 0;
+
+    init {
+        write ">>> STEP 1: Loading geographic zones...";
+        create district from: shape_districts with: [zone_id::string(read("ID"))];
+        create admin_zone from: filter_admin;
+        create urban_zone from: filter_urban;
+        create rural_zone from: filter_rural;
+
+        map<string, district> district_index <- district as_map (each.zone_id::each);
+
+        write ">>> STEP 2: Building road network topology...";
+        create road from: shape_roads;
+        road_network <- as_edge_graph(road);
+
+        write ">>> STEP 3: Creating Points of Interest...";
+        matrix data_pts <- matrix(csv_points);
+        loop i from: 0 to: data_pts.rows - 1 {
+            create point_of_interest {
+                location <- {float(data_pts[0, i]), float(data_pts[1, i])};
+            }
+        }
+
+        write ">>> STEP 4: Stream-reading Traffic CSV...";
+        loop row over: csv_traffic_flows {
+            if (row = "8") { 
+                string origin_id <- string(row);
+                string dest_id   <- string(row);
+                float flow_val   <- float(row);
+
+                if (flow_val > 0 and (origin_id in district_index.keys) and (dest_id in district_index.keys)) {
+                    create trip_scheduler {
+                        total_passengers <- int(flow_val);
+                        depart_at <- myself.starting_date + rnd(3600);
+                        origin_zone <- district_index[origin_id];
+                        dest_zone <- district_index[dest_id];
+                    }
+                }
+            }
+        }
+        write ">>> STEP 5: Initialization complete.";
+    }
+}
+
+species admin_zone { aspect default { draw shape color: rgb(100, 100, 255, 40); } }
+species urban_zone { aspect default { draw shape color: rgb(255, 100, 100, 40); } }
+species rural_zone { aspect default { draw shape color: rgb(100, 255, 100, 40); } }
+species district { string zone_id; aspect default { draw shape color: #lightgray; } }
+species road { aspect default { draw shape color: #dimgray; } }
+species point_of_interest { aspect default { draw circle(400) color: #royalblue; } }
+
+species trip_scheduler {
+    int total_passengers;
+    date depart_at;
+    district origin_zone;
+    district dest_zone;
+
+    reflex dispatch when: current_date >= depart_at {
+        int v_to_spawn <- round(total_passengers * (display_percentage / 100.0));
+        if (v_to_spawn > 0) {
+            create commuter number: v_to_spawn {
+                location <- any_location_in(myself.origin_zone);
+                target <- any_location_in(myself.dest_zone);
+            }
+            ask world { total_spawned <- total_spawned + v_to_spawn; }
+        }
+        do die;
+    }
+}
+
+species commuter skills: [moving] {
+    point target;
+    
+    reflex move {
+        do goto target: target speed: 50 #km/#h on: road_network;
+        if (location distance_to target < 50 #m) {
+            ask world { total_arrived <- total_arrived + 1; }
+            do die;
+        }
+    }
+    
+    aspect default {
+        draw triangle(300) color: #red rotate: heading + 90;
+    }
+}
+
+experiment RegionalTrafficAnalysis type: gui {
+    output {
+        display MainMap {
+            species district;
+            species admin_zone;
+            species urban_zone;
+            species rural_zone;
+            species road;
+            species point_of_interest;
+            species commuter;
+        }
+        
+        monitor "Active Commuters" value: length(commuter);
+        monitor "Total Arrived" value: total_arrived;
+    }
+}
