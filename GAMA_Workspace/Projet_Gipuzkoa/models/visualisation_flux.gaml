@@ -44,6 +44,8 @@ global {
         matrix flow_data <- matrix(csv_traffic_flows);
         int total_records <- flow_data.rows - 1;
         
+        write "Total OD pairs to process: " + total_records;
+
         loop i from: 1 to: total_records {
             if (int(flow_data[1, i]) = 8) {
                 string origin_id <- string(flow_data[2, i]);       
@@ -107,7 +109,6 @@ species district {
 // Point of Interest Species
 species point_of_interest {
     aspect default {
-        // Semi-transparent dodger blue halo for visibility at regional scale
         draw circle(600) color: rgb(30, 144, 255, 40); 
     }
 }
@@ -141,11 +142,12 @@ experiment RegionalTrafficAnalysis type: gui {
     parameter "Flow Display Percentage (%)" var: display_percentage min: 0.1 max: 100.0 step: 0.5 category: "Traffic Settings";
 
     output {
-        display "Regional Map" type: java2D background: #white {
-            // Layer rendering order: Districts (Bottom) -> POIs -> Roads -> Vehicles (Top)
-            species district aspect: default;
-            species point_of_interest aspect: default;
-            species road aspect: default;
+        display "Regional Map" type: java2D background: #white refresh: every(2 #cycles) autosave: true {
+        
+            species district aspect: default refresh: false;
+            species point_of_interest aspect: default refresh: false;
+            species road aspect: default refresh: false;
+            
             species commuter aspect: default;
         }
     }
