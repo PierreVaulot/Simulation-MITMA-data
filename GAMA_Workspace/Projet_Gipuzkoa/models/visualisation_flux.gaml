@@ -7,7 +7,6 @@ global {
     file csv_traffic_flows <- csv_file("../includes/flux_gipuzkoa_final.csv", ",");
     file csv_points <- csv_file("../includes/points_region_prets.csv", true);
 
-    // Set environment bounds based on the regional shapefile
     geometry shape <- envelope(shape_districts);
     graph road_network;
 
@@ -27,7 +26,7 @@ global {
 
         write ">>> Building regional road network...";
         create road from: shape_roads;
-        road_network <- as_edge_graph(road);
+        road_network <- as_edge_graph(road, 1.0);
 
         // Load and create Points of Interest
         write ">>> Loading Points of Interest...";
@@ -123,7 +122,14 @@ species commuter skills: [moving] {
     point target;
     
     reflex move {
+        point old_position <- copy(location);
+        
         do goto target: target speed: 80 #km/#h on: road_network;
+        
+        if (location = old_position) {
+            do goto target: target speed: 80 #km/#h; 
+        }
+        
         if (location distance_to target < 50 #m) { 
             do die; 
         }
@@ -143,7 +149,7 @@ experiment RegionalTrafficAnalysis type: gui {
 
     output {
         display "Regional Map" type: java2D background: #white refresh: every(2 #cycles) autosave: true {
-        
+            
             species district aspect: default refresh: false;
             species point_of_interest aspect: default refresh: false;
             species road aspect: default refresh: false;
