@@ -35,7 +35,7 @@ def filtrer_routes_voitures(input_shapefile, output_shapefile):
     print("Finish")
 
 if __name__ == "__main__":
-    fichier_entree = "C:\Users\pierr\Desktop\Projet1_Gipuzkoa\pais-vasco-260608-free\gis_osm_roads_free_1.shp"
-    fichier_sortie = "C:\Users\pierr\Desktop\Projet1_Gipuzkoa\road_pais_vasco_clean"
+    fichier_entree = r"C:\Users\pierr\Desktop\Projet1_Gipuzkoa\pais-vasco-260608-free\gis_osm_roads_free_1.shp"
+    fichier_sortie = r"C:\Users\pierr\Desktop\Projet1_Gipuzkoa\road_pais_vasco_clean\road_pais_vasco_clean.shp"
     
     filtrer_routes_voitures(fichier_entree, fichier_sortie)
