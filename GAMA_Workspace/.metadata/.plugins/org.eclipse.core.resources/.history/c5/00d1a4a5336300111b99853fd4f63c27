@@ -1,0 +1,195 @@
+model GipuzkoaRegionalTraffic
+
+global {
+    // --- 1. DATA SOURCES ---
+    file shape_districts <- file("../includes/gipuzkoa_distritos.shp");
+    file shape_roads <- file("../includes/road_gipuzkoa/road_gipuzkoa.shp"); 
+    file csv_traffic_flows <- csv_file("../includes/flux_gipuzkoa_final.csv", ",");
+    file csv_points <- csv_file("../includes/points_region_prets.csv", true);
+
+    geometry shape <- envelope(shape_districts);
+    graph road_network;
+
+    // --- 2. CONFIGURATION PARAMETERS ---
+    float display_percentage <- 5.0; 
+
+    init {
+        // --- 3. TEMPORAL SETUP ---
+        starting_date <- date("2025-02-14 08:00:00");
+        step <- 5 #s; 
+        
+        // --- 4. SPATIAL INITIALIZATION ---
+        write ">>> Initializing spatial environment...";
+        create district from: shape_districts with: [zone_id::string(read("ID"))]; 
+        
+        map<string, district> district_index <- district as_map (each.zone_id::each);
+
+        write ">>> Building regional road network...";
+        create road from: shape_roads;
+        road_network <- as_edge_graph(road, 1.0);
+
+        // Load and create Points of Interest
+        write ">>> Loading Points of Interest...";
+        matrix data_pts <- matrix(csv_points);
+        loop i from: 0 to: data_pts.rows - 1 {
+            create point_of_interest {
+                location <- {float(data_pts[0, i]), float(data_pts[1, i])};
+            }
+        }
+        write "    -> " + length(point_of_interest) + " POIs generated.";
+
+        // --- 5. TRAFFIC DATA INGESTION ---
+        write ">>> Loading traffic flow matrices...";
+        matrix flow_data <- matrix(csv_traffic_flows);
+        int total_records <- flow_data.rows - 1;
+        
+        write "Total OD pairs to process: " + total_records;
+
+        loop i from: 1 to: total_records {
+            if (int(flow_data[1, i]) = 8) {
+                string origin_id <- string(flow_data[2, i]);       
+                string dest_id <- string(flow_data[3, i]);      
+                int passenger_count <- int(float(flow_data[13, i])); 
+
+                if (origin_id in district_index.keys and dest_id in district_index.keys) {
+                    if (passenger_count > 0) {
+                        create trip_scheduler {
+                            total_passengers <- passenger_count;
+                            int departure_delay <- rnd(3600);
+                            depart_at <- starting_date + departure_delay; 
+                            origin_zone <- district_index[origin_id];
+                            dest_zone <- district_index[dest_id];
+                        }
+                    }
+                }
+            }
+        }
+        write ">>> System Ready: " + length(trip_scheduler) + " flow operations scheduled.";
+        write "----------------------------------------------------";
+    }
+
+    // --- 6. TELEMETRY & LOGGING ---
+    reflex telemetry_logger when: current_date.second = 0 {
+        string h <- string(current_date.hour);
+        string m <- (current_date.minute < 10 ? "0" : "") + string(current_date.minute);
+        int compute_time <- int(total_duration);
+        write "[Sim Time: " + h + ":" + m + "] | [Compute: " + compute_time + "s] | [Active Vehicles: " + length(commuter) + "]";
+    }
+}
+
+// --- SPECIES DEFINITIONS ---
+
+species trip_scheduler {
+    int total_passengers;
+    date depart_at;
+    district origin_zone;
+    district dest_zone;
+
+    reflex dispatch_vehicles when: current_date >= depart_at {
+        int vehicles_to_spawn <- round(total_passengers * (display_percentage / 100.0));
+        
+        if (vehicles_to_spawn > 0) {
+            create commuter number: vehicles_to_spawn {
+                location <- any_location_in(myself.origin_zone);
+                target <- any_location_in(myself.dest_zone);
+            }
+        }
+        do die; 
+    }
+}
+
+species district {
+    string zone_id;
+    aspect default { 
+        draw shape color: rgb(240, 240, 240) border: #silver; 
+    }
+}
+
+// Point of Interest Species
+species point_of_interest {
+    aspect default {
+        draw circle(100) color: rgb(0, 255, 0, 80); 
+    }
+}
+
+species road {
+    aspect default { 
+        draw shape color: rgb(0, 40, 0) width: 1.0; 
+    }
+}
+
+species commuter skills: [moving] {
+    point target;
+    bool is_offroad <- false;
+    point recovery_target <- nil;
+    
+    reflex move {
+        if (is_offroad) {
+            do goto target: recovery_target speed: 80 #km/#h;
+            
+            if (location distance_to recovery_target < 10 #m) {
+                is_offroad <- false;
+            }
+        } else {
+            point old_position <- copy(location);
+            do goto target: target speed: 80 #km/#h on: road_network;
+            
+            if (location = old_position) {
+                if (location distance_to target < 800 #m) {
+                    do die;
+                } else {
+                    is_offroad <- true;
+                    
+                    road current_road <- road closest_to location;
+                    list<road> nearby_roads <- (road at_distance 2000 #m) - current_road;
+                    
+                    if (length(nearby_roads) > 0) {
+                        road new_road <- nearby_roads closest_to location;
+                        recovery_target <- new_road.shape.points closest_to location;
+                    } else {
+                        recovery_target <- target;
+                    }
+                }
+            }
+        }
+        
+        if (location distance_to target < 50 #m) { 
+            do die; 
+        }
+    }
+    
+    aspect default {
+        draw circle(250) color: rgb(57, 255, 20); 
+        draw triangle(350) color: rgb(57, 255, 20) border: #white width: 1 rotate: heading + 90;
+    }
+}
+
+// --- EXPERIMENT / GUI ---
+
+experiment RegionalTrafficAnalysis type: gui {
+    
+    parameter "Flow Display Percentage (%)" var: display_percentage min: 0.1 max: 100.0 step: 0.5 category: "Traffic Settings";
+
+    output {
+        display "Regional Map" type: opengl background: #black axes: false camera: "Vue_2D" refresh: every(2 #cycles) autosave: true {
+            
+            camera "Vue_2D" location: {world.shape.width / 2, world.shape.height / 2, world.shape.width} target: {world.shape.width / 2, world.shape.height / 2, 0};
+            
+            species district aspect: default refresh: false;
+            species point_of_interest aspect: default refresh: false;
+            species road aspect: default refresh: false;
+            
+            species commuter aspect: default trace: 25 fading: true;
+            
+            graphics "Clock" {
+                string h <- string(current_date.hour);
+                string m <- (current_date.minute < 10 ? "0" : "") + string(current_date.minute);
+                string s <- (current_date.second < 10 ? "0" : "") + string(current_date.second);
+                
+                point pos <- {world.shape.width * 0.02, world.shape.height * 0.05};
+                
+                draw "Time : " + h + ":" + m + ":" + s at: pos color: rgb(57, 255, 20) font: font("SansSerif", 60, #bold);
+            }
+        }
+    }
+}
