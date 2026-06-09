@@ -34,7 +34,7 @@ The project focuses on the Gipuzkoa province (Basque Country), specifically anal
 * `population_dynamique_reelle.csv`: The temporal ledger used to animate district population changes.
 * `roads_gipuzkoa_complet.shp`: The transformed road network graph ingested by the GAMA Platform.
 
-## How to Run Locally
+## How to Run Python Scripts Locally
 
 1.  Clone this repository.
 2.  Create an `includes/` and `road_gipuzkoa/` folder at the root.
@@ -42,6 +42,17 @@ The project focuses on the Gipuzkoa province (Basque Country), specifically anal
 4.  Install dependencies: `pip install pandas geopandas shapely pyproj`
 5.  Execute the scripts in numerical order.
 6.  Import the resulting `.json` and `.csv` files into [Kepler.gl](https://kepler.gl/demo) to view the spatiotemporal animations.
+
+## How to Run the GAMA Simulation (GUI Mode)
+
+To run the agent-based simulation with full visual rendering on your local machine:
+
+1. Open the **GAMA Platform** desktop application (version 2025.06 recommended).
+2. Import this repository folder into your GAMA Workspace.
+3. Navigate to the `models/` directory and open `visualisation_flux.gaml`.
+4. Click the **Run** button (green play icon in the top toolbar) to instantiate the `RegionalTrafficAnalysis` experiment.
+5. In the simulation parameters panel under *Traffic Settings*, adjust the **Flow Display Percentage (%)** slider (recommended values: `0.5%` to `5.0%` to optimize rendering performance on local hardware).
+6. Click the **Play** button in the simulation control interface to start the visual execution.
 
 ## Tech Stack
 * **Data Processing:** Python 3, Pandas (Chunking/Aggregations)
