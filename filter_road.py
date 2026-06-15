@@ -1,45 +1,43 @@
 import geopandas as gpd
 
 def filtrer_et_couper_routes(input_roads, input_districts, output_shapefile):
-    print(f"Chargement des routes OSM : {input_roads}...")
+    print(f"Load roads : {input_roads}...")
     try:
         gdf_roads = gpd.read_file(input_roads)
     except Exception as e:
-        print(f"Erreur de chargement des routes : {e}")
+        print(f"Error : {e}")
         return
 
-    print(f"Chargement des frontières (Districts) : {input_districts}...")
+    print(f"Load borders (Districts) : {input_districts}...")
     try:
         gdf_districts = gpd.read_file(input_districts)
     except Exception as e:
-        print(f"Erreur de chargement des districts : {e}")
+        print(f"Error : {e}")
         return
 
-    # 1. ALIGNEMENT DES SYSTÈMES DE COORDONNÉES (CRUCIAL)
-    print("Vérification des systèmes de projection (CRS)...")
+    print("CRS")
     if gdf_roads.crs != gdf_districts.crs:
-        print(f"Alignement des CRS : Conversion des routes vers {gdf_districts.crs}...")
+        print(f"Alignement: {gdf_districts.crs}...")
         gdf_roads = gdf_roads.to_crs(gdf_districts.crs)
 
-    # 2. FILTRAGE DES TYPES DE VOIES
-    print("Filtrage des voies piétonnes/cyclables...")
+    print("Delete no used road")
     voies_a_exclure = [
         'footway', 'pedestrian', 'cycleway', 'steps', 
         'path', 'track', 'bridleway', 'service'
     ]
     gdf_voitures = gdf_roads[~gdf_roads['fclass'].isin(voies_a_exclure)]
-    print(f"Routes automobiles conservées avant découpage : {len(gdf_voitures)}")
+    print(f"Roads used: {len(gdf_voitures)}")
 
-    # 3. DÉCOUPAGE SPATIAL (CLIPPING)
-    print("Découpage (clipping) des routes avec l'emporte-pièce de Gipuzkoa... (Cela peut prendre 1 à 2 minutes)")
+    
+    print("Clipping")
     gdf_gipuzkoa_roads = gpd.clip(gdf_voitures, gdf_districts)
-    print(f"Routes restantes après découpage : {len(gdf_gipuzkoa_roads)}")
+    print(f"After clipping : {len(gdf_gipuzkoa_roads)}")
 
     # 4. SAUVEGARDE
-    print(f"Sauvegarde en cours vers : {output_shapefile}...")
+    print(f"Save: {output_shapefile}...")
     gdf_gipuzkoa_roads.to_file(output_shapefile)
     
-    print("Terminé avec succès ! 🎉 Le fichier est parfait pour GAMA.")
+    print("Finish")
 
 if __name__ == "__main__":
     fichier_routes_osm = r"C:\Users\pierr\Desktop\Projet1_Gipuzkoa\pais-vasco-260608-free\gis_osm_roads_free_1.shp"
