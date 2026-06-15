@@ -3,7 +3,7 @@ model GipuzkoaRegionalTraffic
 global {
     // --- 1. DATA SOURCES ---
     file shape_districts <- file("../includes/gipuzkoa_distritos.shp");
-    file shape_roads <- file("../includes/road_gipuzkoa/road_gipuzkoa.shp"); 
+    file shape_roads <- file("../includes/road_pais_vasco_clean/road_pais_vasco_clean.shp"); 
     file csv_traffic_flows <- csv_file("../includes/flux_gipuzkoa_final.csv", ",");
     file csv_points <- csv_file("../includes/points_region_prets.csv", true);
 
@@ -108,36 +108,72 @@ species district {
 // Point of Interest Species
 species point_of_interest {
     aspect default {
-        draw circle(600) color: rgb(30, 144, 255, 40); 
+        draw circle(150) color: rgb(255, 0, 0, 200); 
     }
 }
 
 species road {
     aspect default { 
-        draw shape color: rgb(110, 110, 110) width: 1.0; 
+        draw shape color: rgb(40, 50, 65) width: 1.0; 
     }
 }
 
 species commuter skills: [moving] {
     point target;
+    bool is_offroad <- false;
+    bool is_final_approach <- false;
+    point recovery_target <- nil;
+    int stuck_count <- 0;
     
     reflex move {
         point old_position <- copy(location);
         
-        do goto target: target speed: 80 #km/#h on: road_network;
-        
-        if (location = old_position) {
-            do goto target: target speed: 80 #km/#h; 
+        if (is_final_approach) {
+            do goto target: target speed: 80 #km/#h;
+        } 
+        else if (is_offroad) {
+            do goto target: recovery_target speed: 80 #km/#h;
+            if (location distance_to recovery_target < 10 #m) {
+                is_offroad <- false;
+            }
+        } 
+        else {
+            do goto target: target speed: 80 #km/#h on: road_network;
+            
+            if (location = old_position) {
+                stuck_count <- stuck_count + 1;
+                
+                if (stuck_count >= 10) {
+                    do die;
+                }
+                
+                if (location distance_to target < 2000 #m) {
+                    is_final_approach <- true;
+                } else {
+                    is_offroad <- true;
+                    road current_road <- road closest_to location;
+                    list<road> nearby_roads <- (road at_distance 2000 #m) - current_road;
+                    
+                    if (length(nearby_roads) > 0) {
+                        road new_road <- nearby_roads closest_to location;
+                        recovery_target <- new_road.shape.points closest_to location;
+                    } else {
+                        is_final_approach <- true; 
+                    }
+                }
+            } else {
+                stuck_count <- 0;
+            }
         }
         
-        if (location distance_to target < 50 #m) { 
+        if (location distance_to target < 100 #m) { 
             do die; 
         }
     }
     
     aspect default {
-        draw circle(300) color: rgb(255, 0, 0, 40); 
-        draw triangle(400) color: #red border: #white width: 2 rotate: heading + 90;
+        draw circle(400) at: {location.x, location.y, 10} color: #dodgerblue; 
+        draw triangle(500) at: {location.x, location.y, 10} color: #dodgerblue border: #white width: 1 rotate: heading + 90;
     }
 }
 
@@ -148,13 +184,25 @@ experiment RegionalTrafficAnalysis type: gui {
     parameter "Flow Display Percentage (%)" var: display_percentage min: 0.1 max: 100.0 step: 0.5 category: "Traffic Settings";
 
     output {
-        display "Regional Map" type: java2D background: #white refresh: every(2 #cycles) autosave: true {
+        display "Regional Map" type: opengl background: rgb(15, 22, 33) axes: false camera: "Vue_2D" refresh: every(2 #cycles) autosave: true {
+            
+            camera "Vue_2D" location: {world.shape.width / 2, world.shape.height / 2, world.shape.width} target: {world.shape.width / 2, world.shape.height / 2, 0};
             
             species district aspect: default refresh: false;
             species point_of_interest aspect: default refresh: false;
             species road aspect: default refresh: false;
             
-            species commuter aspect: default;
+            species commuter aspect: default trace: 15 fading: true;
+            
+            graphics "Clock" {
+                string h <- string(current_date.hour);
+                string m <- (current_date.minute < 10 ? "0" : "") + string(current_date.minute);
+                string s <- (current_date.second < 10 ? "0" : "") + string(current_date.second);
+                
+                point pos <- {world.shape.width * 0.02, world.shape.height * 0.05};
+                
+                draw "Time : " + h + ":" + m + ":" + s at: pos color: #white font: font("SansSerif", 60, #bold);
+            }
         }
     }
 }
