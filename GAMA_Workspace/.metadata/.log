@@ -112,3 +112,39 @@ Caused by: java.lang.NullPointerException: Cannot invoke "String.replace(char, c
 	at org.eclipse.ui.internal.editors.text.codemining.annotation.AnnotationCodeMiningProvider.lambda$0(AnnotationCodeMiningProvider.java:222)
 	at java.base/java.util.concurrent.CompletableFuture$AsyncSupply.run(CompletableFuture.java:1768)
 	... 1 more
+
+!ENTRY org.eclipse.jface.text 4 0 2026-06-15 12:35:41.765
+!MESSAGE java.lang.NullPointerException: Cannot invoke "String.replace(char, char)" because "label" is null
+!STACK 0
+java.util.concurrent.CompletionException: java.lang.NullPointerException: Cannot invoke "String.replace(char, char)" because "label" is null
+	at java.base/java.util.concurrent.CompletableFuture.encodeThrowable(CompletableFuture.java:315)
+	at java.base/java.util.concurrent.CompletableFuture.completeThrowable(CompletableFuture.java:320)
+	at java.base/java.util.concurrent.CompletableFuture$AsyncSupply.run(CompletableFuture.java:1770)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+Caused by: java.lang.NullPointerException: Cannot invoke "String.replace(char, char)" because "label" is null
+	at org.eclipse.ui.internal.editors.text.codemining.annotation.AnnotationCodeMining.sanitizeLabel(AnnotationCodeMining.java:57)
+	at org.eclipse.ui.internal.editors.text.codemining.annotation.AnnotationCodeMining.<init>(AnnotationCodeMining.java:51)
+	at org.eclipse.ui.internal.editors.text.codemining.annotation.AnnotationCodeMiningProvider.createCodeMining(AnnotationCodeMiningProvider.java:284)
+	at java.base/java.util.stream.ReferencePipeline$3$1.accept(ReferencePipeline.java:197)
+	at java.base/java.util.stream.ReferencePipeline$2$1.accept(ReferencePipeline.java:179)
+	at java.base/java.util.stream.SliceOps$1$1.accept(SliceOps.java:200)
+	at java.base/java.util.stream.ReferencePipeline$2$1.accept(ReferencePipeline.java:179)
+	at java.base/java.util.stream.ReferencePipeline$2$1.accept(ReferencePipeline.java:179)
+	at java.base/java.util.stream.SortedOps$RefSortingSink.end(SortedOps.java:400)
+	at java.base/java.util.stream.Sink$ChainedReference.end(Sink.java:261)
+	at java.base/java.util.stream.Sink$ChainedReference.end(Sink.java:261)
+	at java.base/java.util.stream.Sink$ChainedReference.end(Sink.java:261)
+	at java.base/java.util.stream.Sink$ChainedReference.end(Sink.java:261)
+	at java.base/java.util.stream.Sink$ChainedReference.end(Sink.java:261)
+	at java.base/java.util.stream.AbstractPipeline.copyIntoWithCancel(AbstractPipeline.java:528)
+	at java.base/java.util.stream.AbstractPipeline.copyInto(AbstractPipeline.java:513)
+	at java.base/java.util.stream.AbstractPipeline.wrapAndCopyInto(AbstractPipeline.java:499)
+	at java.base/java.util.stream.AbstractPipeline.evaluate(AbstractPipeline.java:575)
+	at java.base/java.util.stream.AbstractPipeline.evaluateToArrayNode(AbstractPipeline.java:260)
+	at java.base/java.util.stream.ReferencePipeline.toArray(ReferencePipeline.java:616)
+	at java.base/java.util.stream.ReferencePipeline.toArray(ReferencePipeline.java:622)
+	at java.base/java.util.stream.ReferencePipeline.toList(ReferencePipeline.java:627)
+	at org.eclipse.ui.internal.editors.text.codemining.annotation.AnnotationCodeMiningProvider.createCodeMinings(AnnotationCodeMiningProvider.java:272)
+	at org.eclipse.ui.internal.editors.text.codemining.annotation.AnnotationCodeMiningProvider.lambda$0(AnnotationCodeMiningProvider.java:222)
+	at java.base/java.util.concurrent.CompletableFuture$AsyncSupply.run(CompletableFuture.java:1768)
+	... 1 more
